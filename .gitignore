@@ -83,8 +83,8 @@ mlruns/
 
 # Data
 data/
-datasets/
 coco/
+# Note: defusion/datasets/ contains code, not data
 *.zip
 *.tar
 *.tar.gz
