@@ -1,0 +1,87 @@
+# DeFusion Configuration
+# =======================
+# Configuration for training and evaluation of DeFusion model
+# Based on "Fusion from Decomposition: A Self-Supervised Decomposition Approach for Image Fusion"
+
+# Model Architecture (Section 3.3)
+model:
+  in_channels: 3          # RGB input
+  feature_dim: 256        # Feature dimension k
+  base_channels: 64       # Base channels for encoder
+  encoder_blocks: [2, 2, 2]  # ResBlocks per encoder stage
+  decoder_blocks: 2       # ResBlocks in decoders
+  proj_hidden_channels: 128  # Hidden channels in projection heads
+
+# Training Parameters (Section 3.3)
+training:
+  # Dataset
+  dataset: COCO
+  max_images: 50000       # 50k images per paper
+  image_size: 256         # 256x256 per paper
+
+  # Optimization
+  epochs: 50              # 50 epochs per paper
+  batch_size: 8           # 8 per paper
+  learning_rate: 0.001    # 1e-3 per paper
+  lr_decay_epochs: 10     # Halve every 10 epochs
+  lr_decay_factor: 0.5    # Halve learning rate
+  optimizer: Adam
+
+  # Data augmentation
+  random_crop: true
+  random_flip: true
+
+  # CUD augmentation
+  noise_std: 0.1          # Gaussian noise sigma
+  mask_method: random_rects  # Mask generation method
+  min_coverage: 0.3       # Minimum mask coverage
+  max_coverage: 0.7       # Maximum mask coverage
+
+# Loss Weights
+loss:
+  weight_common: 1.0      # Common projection loss weight
+  weight_unique: 1.0      # Unique projection loss weight
+  weight_recon: 1.0       # Reconstruction loss weight
+  masked_loss: true       # Use masked loss computation
+
+# Evaluation
+evaluation:
+  # Test datasets (Section 4)
+  datasets:
+    multi_exposure:
+      - MEFB
+      - SICE
+    multi_focus:
+      - Real-MFF
+    ir_visible:
+      - TNO
+      - RoadScene
+
+  # Metrics (Tables 1-3)
+  metrics:
+    - SSIM
+    - MEF_SSIM
+    - Entropy
+    - MI
+    - QCV
+    - SD
+    - Gradient
+
+# Hardware
+hardware:
+  device: cuda
+  num_workers: 4
+  pin_memory: true
+
+# Logging
+logging:
+  save_freq: 5            # Save checkpoint every N epochs
+  log_freq: 100           # Log every N batches
+  tensorboard: true
+  visualize_freq: 500     # Visualize every N batches
+
+# Paths (adjust as needed)
+paths:
+  coco_dir: ./data/coco/train2017
+  output_dir: ./output
+  checkpoint_dir: ./checkpoints

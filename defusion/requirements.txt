@@ -1,0 +1,30 @@
+# DeFusion Requirements
+# =====================
+# Dependencies for training and evaluating the DeFusion model
+
+# Core dependencies
+torch>=1.9.0
+torchvision>=0.10.0
+numpy>=1.19.0
+Pillow>=8.0.0
+
+# Configuration and logging
+PyYAML>=5.4.0
+tensorboard>=2.5.0
+
+# Metrics computation
+scipy>=1.6.0
+
+# Visualization (optional but recommended)
+matplotlib>=3.3.0
+
+# Progress bars and utilities
+tqdm>=4.60.0
+
+# Development (optional)
+# pytest>=6.0.0
+# black>=21.0.0
+# flake8>=3.9.0
+
+# COCO dataset tools (optional, for downloading dataset)
+# pycocotools>=2.0.0
