@@ -47,8 +47,8 @@ class SplitAttention(nn.Module):
         inter_channels = max(channels * radix // reduction_factor, 32)
 
         # Global average pooling + FC layers for attention
+        # No normalization after GAP (1x1 spatial) - use ReLU directly
         self.fc1 = nn.Conv2d(channels, inter_channels, kernel_size=1, groups=cardinality)
-        self.bn1 = norm_layer(inter_channels)
         self.relu = nn.ReLU(inplace=True)
         self.fc2 = nn.Conv2d(inter_channels, channels * radix, kernel_size=1, groups=cardinality)
 
@@ -74,9 +74,8 @@ class SplitAttention(nn.Module):
         # Global average pooling
         gap = F.adaptive_avg_pool2d(gap, 1)
 
-        # Attention computation
+        # Attention computation (no norm after GAP)
         gap = self.fc1(gap)
-        gap = self.bn1(gap)
         gap = self.relu(gap)
         atten = self.fc2(gap)
         atten = self.rsoftmax(atten).view(batch, -1, 1, 1)
