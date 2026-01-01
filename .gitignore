@@ -97,3 +97,6 @@ coco/
 
 # Temporary Windows files
 nul
+
+# Client deliverables (large demo images)
+client_deliverables/demos/
