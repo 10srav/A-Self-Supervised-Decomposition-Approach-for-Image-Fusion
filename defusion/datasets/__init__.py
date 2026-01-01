@@ -9,12 +9,13 @@ Components:
 - FusionDataset: Generic dataset for fusion evaluation
 """
 
-from .cud_augmentation import CUDAugmentation, generate_non_overlapping_masks
+from .cud_augmentation import CUDAugmentation, generate_complementary_masks, create_batch_cud
 from .coco_dataset import COCODataset, get_coco_dataloader
 
 __all__ = [
     'CUDAugmentation',
-    'generate_non_overlapping_masks',
+    'generate_complementary_masks',
+    'create_batch_cud',
     'COCODataset',
     'get_coco_dataloader'
 ]
