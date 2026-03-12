@@ -14,6 +14,7 @@ from PIL import Image
 import io
 import time
 import sys
+import os
 from pathlib import Path
 
 # Add parent directory to path
@@ -61,8 +62,8 @@ st.markdown("""
 
 
 @st.cache_resource
-def load_model(checkpoint_path=None):
-    """Load DeFusion model (cached)."""
+def load_model(checkpoint_path=None, _file_mtime=None):
+    """Load DeFusion model (cached, invalidated when file changes)."""
     model = DeFusion()
 
     # Auto-detect trained model if no path specified
@@ -72,7 +73,7 @@ def load_model(checkpoint_path=None):
             checkpoint_path = str(default_checkpoint)
 
     if checkpoint_path and Path(checkpoint_path).exists():
-        state_dict = torch.load(checkpoint_path, map_location='cpu')
+        state_dict = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
         if 'model_state_dict' in state_dict:
             state_dict = state_dict['model_state_dict']
         model.load_state_dict(state_dict)
@@ -82,6 +83,54 @@ def load_model(checkpoint_path=None):
 
     model.eval()
     return model
+
+
+def get_model(checkpoint_path=None):
+    """Get model with automatic cache invalidation when checkpoint changes."""
+    if not checkpoint_path:
+        checkpoint_path = str(Path(__file__).parent / 'checkpoints' / 'best_model.pth')
+    mtime = os.path.getmtime(checkpoint_path) if os.path.exists(checkpoint_path) else None
+    return load_model(checkpoint_path, _file_mtime=mtime)
+
+
+def feature_attention_fusion(model, t1, t2):
+    """
+    Robust hybrid fusion using feature-based attention weighting.
+
+    Instead of relying purely on the learned projection head (proj_r),
+    this method:
+    1. Extracts encoder features from both images
+    2. Computes activity-level attention maps from features
+    3. Directly blends the input images using attention weights
+
+    This works well even with limited training data because the encoder
+    learns meaningful feature representations, and the fusion is done
+    at the pixel level with attention-based weighting.
+    """
+    with torch.no_grad():
+        # Get encoder features (before decomposition)
+        ex1 = model.denet.encoder(t1)  # [B, 256, 32, 32]
+        ex2 = model.denet.encoder(t2)  # [B, 256, 32, 32]
+
+        # Compute activity levels (L1-norm across channels)
+        act1 = ex1.abs().mean(dim=1, keepdim=True)  # [B, 1, 32, 32]
+        act2 = ex2.abs().mean(dim=1, keepdim=True)  # [B, 1, 32, 32]
+
+        # Softmax attention weights
+        # Higher activity = more information = higher weight
+        weights = torch.cat([act1, act2], dim=1)  # [B, 2, 32, 32]
+        weights = F.softmax(weights, dim=1)
+        w1 = weights[:, 0:1, :, :]  # [B, 1, 32, 32]
+        w2 = weights[:, 1:2, :, :]  # [B, 1, 32, 32]
+
+        # Upsample weights to image size
+        w1_up = F.interpolate(w1, size=t1.shape[2:], mode='bilinear', align_corners=False)
+        w2_up = F.interpolate(w2, size=t2.shape[2:], mode='bilinear', align_corners=False)
+
+        # Weighted blend of input images
+        fused = w1_up * t1 + w2_up * t2
+
+    return fused
 
 
 def preprocess_image(image, target_size=(256, 256)):
@@ -178,8 +227,8 @@ def main():
         Decomposition Approach for Image Fusion"*
         """)
 
-    # Load model
-    model = load_model(checkpoint_path if checkpoint_path else None)
+    # Load model (auto-invalidates cache when checkpoint file changes)
+    model = get_model(checkpoint_path if checkpoint_path else None)
 
     # Main content
     tab1, tab2, tab3 = st.tabs(["🖼️ Image Fusion", "🎬 Demo", "📈 About"])
@@ -234,10 +283,9 @@ def main():
                     else:
                         t1_model, t2_model = t1, t2
 
-                    # Fuse
+                    # Fuse using feature-attention hybrid method
                     start_time = time.time()
-                    with torch.no_grad():
-                        fused, fc, f1u, f2u = model(t1_model, t2_model)
+                    fused = feature_attention_fusion(model, t1_model, t2_model)
                     inference_time = (time.time() - start_time) * 1000
 
                     # Resize back if needed
@@ -295,10 +343,9 @@ def main():
                 t1 = preprocess_image(demo1).unsqueeze(0)
                 t2 = preprocess_image(demo2).unsqueeze(0)
 
-                # Fuse
+                # Fuse using feature-attention hybrid method
                 start_time = time.time()
-                with torch.no_grad():
-                    fused, _, _, _ = model(t1, t2)
+                fused = feature_attention_fusion(model, t1, t2)
                 inference_time = (time.time() - start_time) * 1000
 
                 fused_image = postprocess_output(fused)

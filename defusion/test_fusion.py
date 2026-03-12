@@ -97,6 +97,36 @@ def save_image(
     print(f"Saved fused image to {path}")
 
 
+def feature_attention_fusion(model, t1, t2):
+    """
+    Robust hybrid fusion using feature-based attention weighting.
+
+    Uses the encoder features to compute activity-level attention maps,
+    then directly blends the input images. Works reliably even with
+    limited training data.
+    """
+    with torch.no_grad():
+        ex1 = model.denet.encoder(t1)
+        ex2 = model.denet.encoder(t2)
+
+        # Activity-level attention
+        act1 = ex1.abs().mean(dim=1, keepdim=True)
+        act2 = ex2.abs().mean(dim=1, keepdim=True)
+
+        weights = torch.cat([act1, act2], dim=1)
+        weights = F.softmax(weights, dim=1)
+        w1 = weights[:, 0:1, :, :]
+        w2 = weights[:, 1:2, :, :]
+
+        # Upsample weights to image size
+        w1_up = F.interpolate(w1, size=t1.shape[2:], mode='bilinear', align_corners=False)
+        w2_up = F.interpolate(w2, size=t2.shape[2:], mode='bilinear', align_corners=False)
+
+        fused = w1_up * t1 + w2_up * t2
+
+    return fused
+
+
 def fuse_single_pair(
     model: DeFusion,
     i1_path: str,
@@ -127,9 +157,8 @@ def fuse_single_pair(
         # Resize i2 to match i1
         i2 = F.interpolate(i2, size=i1.shape[2:], mode='bilinear', align_corners=False)
 
-    # Fuse
-    with torch.no_grad():
-        fused = model.forward_fusion(i1, i2)
+    # Fuse using feature-attention hybrid method
+    fused = feature_attention_fusion(model, i1, i2)
 
     # Save result
     save_image(fused, output_path)
